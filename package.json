@@ -1,0 +1,54 @@
+{
+  "name": "dsh-sidebar-overlay",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Floating sidebar overlay for DSH: an independently rendered workspace/session browser mounted in the official shell.overlay seat, without touching the official sidebar or grid. 独立渲染的 DSH 浮动侧边栏：不碰官方侧边栏与 grid。",
+  "author": "blockman0321",
+  "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "sidebar",
+    "floating-sidebar",
+    "overlay",
+    "ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blockman0321/dsh-sidebar-overlay.git"
+  },
+  "homepage": "https://github.com/blockman0321/dsh-sidebar-overlay#readme",
+  "bugs": {
+    "url": "https://github.com/blockman0321/dsh-sidebar-overlay/issues"
+  },
+  "engines": {
+    "dsh": "^0.2.0-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

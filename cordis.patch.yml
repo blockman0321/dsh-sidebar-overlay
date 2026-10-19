@@ -1,0 +1,7 @@
+# dsh-sidebar-overlay bundle patch：把独立浮动侧边栏挂进宿主插件树。
+# （结构与其它 bundle patch 一致：id-targeted insert 条目。
+#  id 须与 client.js / index.js 里的 exports.name 一致。）
+- insert:
+    - id: sidebar-overlay
+      name: 'dsh-sidebar-overlay'
+      config: {}
