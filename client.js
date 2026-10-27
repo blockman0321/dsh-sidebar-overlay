@@ -94,6 +94,41 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * 内置「风车」图标（官方 `IconPluginPinwheelOutlineRegular` 的等价路径）。
+     *
+     * 「插件」面板按钮靠它兜底：primitives 缺失时 `iconOf` 返回空组件，
+     * 按钮就成了没有任何内容的圆壳，用户看不出那是什么。
+     */
+    function PluginGlyph({ size = 16 }) {
+      return h('svg', {
+        width: size,
+        height: size,
+        viewBox: '0 0 16 16',
+        fill: 'none',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        strokeWidth: 1,
+      },
+        h('path', {
+          d: 'M7.84457 5.06199C11.6605 4.93876 14.7962 6.14848 14.8484 7.76397C14.8875 8.97461 13.1838 10.0696 10.7215 10.5942',
+          stroke: 'currentColor',
+        }),
+        h('path', {
+          d: 'M5.12742 8.07731C5.00419 4.26138 6.21391 1.12568 7.8294 1.07351C9.04004 1.03441 10.135 2.73808 10.6596 5.20037',
+          stroke: 'currentColor',
+        }),
+        h('path', {
+          d: 'M8.02457 10.6802C4.20865 10.8034 1.07294 9.5937 1.02077 7.97821C0.981678 6.76758 2.68535 5.67262 5.14763 5.14798',
+          stroke: 'currentColor',
+        }),
+        h('path', {
+          d: 'M10.7476 7.89535C10.8708 11.7113 9.66109 14.847 8.0456 14.8991C6.83496 14.9382 5.74 13.2346 5.21536 10.7723',
+          stroke: 'currentColor',
+        }),
+      )
+    }
+
     /** 官方图标（缺失时为空组件）。 */
     const Icons = {
       search: iconOf('IconSearchOutlineRegular'),
@@ -111,6 +146,9 @@ window.__ModuleLoader__.load({
       /** 个人信息按钮：未登录 / 无头像时的兜底图标。
        *  优先官方 `IconUserOutlineMedium`，缺失时用内置同名规格的 SVG。 */
       user: P.IconUserOutlineMedium ?? UserGlyph,
+      /** 「插件」面板按钮：官方侧边栏 `sidebar.panellist` 的 plugins 行同一个图标
+       *  （风车）。缺失时用内置同路径 SVG，保证按钮不会变成空壳。 */
+      plugins: P.IconPluginPinwheelOutlineRegular ?? PluginGlyph,
       edit: iconOf('IconEditOutlineRegular'),
       trash: iconOf('IconTrashOutlineRegular'),
       archive: iconOf('IconArchiveOutlineRegular'),
@@ -136,6 +174,8 @@ window.__ModuleLoader__.load({
     const inject = ['slots']
 
     const PANEL_ID = 'sidebar-overlay'
+    /** 官方「插件」main 面板的 key（Plugin Manager 占用，见 ui-sidebar 的 panellist 登记）。 */
+    const PANEL_PLUGINS_ID = 'plugins'
     /** 语言命名空间。 */
     const NS = 'floatingSidebarOverlay'
     /** 官方存储的默认工作区标题；展示时替换为本地化名称。 */
@@ -189,6 +229,8 @@ window.__ModuleLoader__.load({
       showNewSession: true,
       /** 是否显示卡片左上角的「个人信息」头像按钮（原侧边栏底部的账户入口）。 */
       showProfile: true,
+      /** 是否显示顶栏的「插件」面板按钮（等价于官方 sidebar.panellist 的 plugins 行）。 */
+      showPluginsPanel: true,
       /** 是否注册总开关快捷键。 */
       hotkey: true,
       /** 总开关快捷键。 */
@@ -1086,6 +1128,35 @@ window.__ModuleLoader__.load({
 /* 头像加载失败/未登录：图标按官方尺寸（16）落在槽内。 */
 [data-dsh-fso-profile-avatar] > svg { flex: none; }
 
+/* ── 「插件」面板按钮：官方 sidebar.panellist 的 plugins 行的浮层版 ──────
+ * 官方那一行是宽 36 高 36 的方形、radius-md、hover/interactive-bg-hover、
+ * 选中是同一底色 + label-primary（见 ui-sidebar 的 panelRow / panelActive）。
+ * 这里与「个人信息」并排，取同高 38 与同描边，只在圆角上保留官方的方形
+ * 语义（radius-md），一眼能看出「这个进面板、那个进设置」。 */
+[data-dsh-fso-panel-button] {
+  box-sizing: border-box;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: .5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+[data-dsh-fso-panel-button]:hover { background: var(--dsw-alias-interactive-bg-hover); }
+[data-dsh-fso-panel-button]:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+/* 选中态：官方 panelActive 用的就是 interactive-bg-hover，不另造颜色。 */
+[data-dsh-fso-panel-button][data-active] { background: var(--dsw-alias-interactive-bg-hover); }
+[data-dsh-fso-panel-button] > svg { flex: none; }
+
 /* ── 区头：对齐官方 sectionHeader（36px）─────────────────────────────────
  * 官方在非 rail 态给 sectionHeader 加了 margin-top:2px; margin-right:-4px，
  * 让区头的操作按钮视觉上贴到列表右边线。 */
@@ -1702,6 +1773,10 @@ window.__ModuleLoader__.load({
       'profile.openSettings': '打开设置',
       'profile.signedIn': '已登录 DeepSeek',
       'profile.signedOut': '未登录',
+      /* 「插件」面板按钮：与官方 sidebar 命名空间 `panels.label`（全局面板）
+       * 同义，但这里只有一个面板，所以文案直接点名「插件」。 */
+      'panel.plugins': '插件',
+      'panel.failed': '无法打开插件面板',
       'session.untitled': '未命名',
       'search': '搜索会话',
       'search.sessions.aria': '搜索会话',
@@ -1829,6 +1904,8 @@ window.__ModuleLoader__.load({
       'profile.openSettings': 'Open settings',
       'profile.signedIn': 'Signed in to DeepSeek',
       'profile.signedOut': 'Signed out',
+      'panel.plugins': 'Plugins',
+      'panel.failed': 'Cannot open the Plugins panel',
       'session.untitled': 'Untitled',
       'search': 'Search sessions',
       'search.sessions.aria': 'Search sessions',
@@ -2915,6 +2992,31 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 判断官方 `sidebar.panellist` 里是否登记了某个全局面板。
+     *
+     * 浮层是自建 DOM，**渲染不出**那个座位里的图标（图标由声明者
+     * `renderSlot('sidebar.panellist', …, { only: id })` 交出，第三方拿不到）。
+     * 所以这里只把它当**能力登记表**读：有这一行 ⇒ 对应的 main 面板确实
+     * 注册着，`ctx.layout.selectPanel(id)` 不会抛错，按钮才画出来。
+     *
+     * 这条检查是必须的：`selectPanel` 对未注册的 key 会**直接 throw**
+     * （`layout.selectPanel: main panel "…" is not registered`），
+     * 没这一步就会得到一个「点了报错」的假按钮。
+     *
+     * @param {object} slots - `ctx.slots`
+     * @param {string} id - 面板 id（如 `'plugins'`）。
+     * @returns {boolean} 座位里是否存在该 id 的登记。
+     */
+    function hasPanelEntry(slots, id) {
+      try {
+        if (slots === undefined || slots === null || typeof slots.entriesOfSlot !== 'function') return false
+        return slots.entriesOfSlot('sidebar.panellist').some(entry => entry?.options?.id === id)
+      } catch {
+        return false
+      }
+    }
+
+    /**
      * 个人信息按钮：浮层顶部、新会话按钮左边的账户入口。
      *
      * **点击直接打开官方设置弹窗**，不再弹官方账户菜单（那是侧边栏底部那个
@@ -2965,6 +3067,34 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 「插件」面板按钮：官方 `sidebar.panellist` 里 plugins 那一行的浮层版。
+     *
+     * 点击 = `ctx.layout.selectPanel('plugins')`，与官方点同一个图标**走同一条
+     * 路径**，所以不必在这里复制任何「打开插件页」的逻辑。
+     *
+     * 选中态读 `usePanelInfo`（与本组件已在用的那一个 hook 同源），高亮用官方
+     * `panelActive` 的同一个 token。
+     *
+     * @param {{usePanelInfo: Function, label: string, onOpen: Function}} props
+     */
+    function PanelButton({ usePanelInfo, label, onOpen }) {
+      const active = typeof usePanelInfo === 'function'
+        ? usePanelInfo(info => info.activePanelId === PANEL_PLUGINS_ID)
+        : false
+      return h(
+        P.Tooltip ?? TooltipFallback,
+        { label, side: 'bottom', delayMs: 500, children: h('button', {
+          type: 'button',
+          'data-dsh-fso-panel-button': '',
+          ...(active === true ? { 'data-active': '' } : {}),
+          'aria-label': label,
+          'aria-current': active === true ? 'page' : undefined,
+          onClick: () => { onOpen() },
+        }, h(Icons.plugins, { size: 16 })) },
+      )
+    }
+
+    /**
      * 浮动侧边栏主体。
      *
      * props 由 slot 系统注入：`useSessions` / `useSessionStatus` / `useWorkspaces` /
@@ -2980,6 +3110,7 @@ window.__ModuleLoader__.load({
         renameWorkspace, deleteWorkspace, insertWorkspaceBefore, createWorkspace,
         searchSessions, searchResultLimit, pickDirectory, hostHome, notify,
         accountSource, accountT, openSettings,
+        pluginsPanel, openPluginsPanel, closeOverlay,
       } = props
 
       const merged = { ...DEFAULTS, ...(config ?? {}) }
@@ -3707,7 +3838,24 @@ window.__ModuleLoader__.load({
             onOpenSettings: typeof openSettings === 'function' ? openSettings : () => {},
           })
         : null
-      const topbar = h('div', { 'data-dsh-fso-topbar': '' }, profileButton, newSessionButton)
+      /* 「插件」面板按钮：与头像同排，排在「新会话」右边。
+       * 只有官方 `sidebar.panellist` 里确实登记了 plugins 时才渲染 ——
+       * `layout.selectPanel` 对未注册的 key 会抛错，这里不能给假按钮。 */
+      const pluginsButton = merged.showPluginsPanel === true
+        && pluginsPanel === true
+        && typeof openPluginsPanel === 'function'
+        ? h(PanelButton, {
+            key: 'plugins-panel',
+            usePanelInfo,
+            label: t('panel.plugins'),
+            onOpen: () => {
+              // 先叫出面板，再收浮层：selectPanel 失败时不至于连浮层都关了。
+              const opened = openPluginsPanel()
+              if (opened === true && typeof closeOverlay === 'function') closeOverlay()
+            },
+          })
+        : null
+      const topbar = h('div', { 'data-dsh-fso-topbar': '' }, profileButton, newSessionButton, pluginsButton)
 
       /* ── 模态框 ───────────────────────────────────────────────────────── */
       const Modal = P.Modal
@@ -3872,6 +4020,15 @@ window.__ModuleLoader__.load({
       let open = false
       let enabled = merged.enabled !== false
       let disposed = false
+      /**
+       * 「刚因导航而收起」标记。
+       *
+       * 顶栏按钮点完会收起浮层，但此时指针往往还停在卡片原来的位置上，而热区
+       * （`trigger: 'content'` 时到内容列左缘的 40%）可能覆盖那一带 —— 用户只要
+       * 轻动一下鼠标，浮层就“又弹出来”，看起来像按钮没生效。所以收起后置上这个
+       * 标记，直到指针离开热区一次才恢复热区触发。
+       */
+      let suppressReveal = false
 
       /** 取卡片节点（可能还没渲染出来）。 */
       const cardOf = () => document.querySelector('[data-dsh-fso-card]')
@@ -4190,6 +4347,13 @@ window.__ModuleLoader__.load({
           const inTrigger = x <= triggerWidth() && belowTop
 
           if (!open) {
+            /* 导航后抑制：指针还有一次机会离开热区，离开即恢复。
+             * 否则点完「插件」浮层马上又弹回来。 */
+            if (suppressReveal) {
+              if (!inTrigger) suppressReveal = false
+              return
+            }
+
             /* 未命中时**低频**重测热区：中栏宽度会因用户拖拽、侧边栏开合、
              * 会话切换而变化（官方写入 `--dsh-chat-user-width`），只读 DOM 的
              * 布局也会变（header 有无 tab 时高度不同）。只靠 resize 会漏。
@@ -4326,6 +4490,31 @@ window.__ModuleLoader__.load({
                  *  `actions.open()`（与官方点「设置」同一条路径）。取不到时
                  *  传 undefined，个人信息按钮就不渲染 —— 而不是一个点了没反应的假按钮。 */
                 openSettings,
+                /** 「插件」面板是否可用：官方 `sidebar.panellist` 里登记了 plugins
+                 *  才为 true。这里只读登记表，不占座位、不渲染它的图标。 */
+                pluginsPanel: hasPanelEntry(slots, PANEL_PLUGINS_ID),
+                /** 打开「插件」面板：与官方点同一个图标走同一条路径。
+                 *  `selectPanel` 对未注册 key 会 throw，所以要包起来并把结果
+                 *  作为布尔返回，调用处据此决定是否收起浮层。 */
+                openPluginsPanel: () => {
+                  try {
+                    const layout = svc('layout')
+                    if (typeof layout?.selectPanel !== 'function') return false
+                    layout.selectPanel(PANEL_PLUGINS_ID)
+                    return true
+                  } catch (error) {
+                    console.warn('[sidebar-overlay] 打开插件面板失败:', error?.message ?? error)
+                    notify('panel.failed')
+                    return false
+                  }
+                },
+                /** 收起浮层（供顶栏按钮在导航后调用）。
+                 *  置 `suppressReveal`：指针通常还停在卡片原位置，而那里仍在
+                 *  热区里；不抑制就会立刻又弹回来。指针离开热区一次即恢复。 */
+                closeOverlay: () => {
+                  suppressReveal = true
+                  setOpen(false)
+                },
                 /** 快捷键目录：渲染器按 hooks 约定自动生成 useShortcuts prop。
                  *  source 缺失时组件内的类型检查会兜住。 */
                 ...(shortcuts?.catalog === undefined ? {} : { hooks: { shortcuts: shortcuts.catalog } }),
@@ -4487,6 +4676,8 @@ window.__ModuleLoader__.load({
     exports.__resolveOpenSettings = resolveOpenSettings
     exports.__bindEntryFace = bindEntryFace
     exports.__ProfileButton = ProfileButton
+    exports.__PanelButton = PanelButton
+    exports.__hasPanelEntry = hasPanelEntry
     return module.exports
   },
 })

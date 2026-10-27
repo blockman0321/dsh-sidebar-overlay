@@ -14,6 +14,25 @@
 
 ---
 
+## 更新日志
+
+### 0.1.1
+
+- **新增顶栏「插件」按钮**（风车图标，38×38，与头像/新会话同排）。点一下切到
+  官方「插件」面板并收起浮层，动作走 `ctx.layout.selectPanel('plugins')` ——
+  与官方点 `sidebar.panellist` 里 plugins 那一行是同一条路径。
+  只为该面板可用时才渲染（读 `sidebar.panellist` 登记表判断），不占官方座位；
+  `showPluginsPanel: false` 可关闭。
+- **收起后抑制重开**：导航类操作收起浮层后，指针若仍停在热区内不会被立刻重新
+  打开（离开热区一次即恢复），消除「点了按钮浮层又弹回来」的观感。
+- 测试增至 463 项；新增断言经变异测试验证（刻意改坏实现后对应断言必然失败）。
+
+### 0.1.0
+
+- 首次发布。
+
+---
+
 ## 为什么要重做
 
 旧方案走的是「复用官方侧边栏 DOM + CSS 浮层化」。那条路能工作，但有两个
@@ -142,6 +161,42 @@ const shellStore = { ...shellHandle, create: () => shellInstance }
 两样都取不到时（官方改了座位名、或相关插件未启用），个人信息按钮**不渲染** ——
 而不是渲染一个点了没反应的假按钮。
 
+### 插件按钮：顶栏右侧，点了打开「插件」页
+
+顶栏「新会话」右边那个风车方块按钮，点一下切到官方的「插件」主面板
+（Plugin Manager 那一页），随后浮层自动收起。
+
+它跟官方的全局面板图标是**同一个目的地、同一条路径**：
+
+```js
+ctx.layout.selectPanel('plugins')   // 官方点 sidebar.panellist 的 plugins 行也是这句
+```
+
+所以插件里没有任何「打开插件页」的复刻逻辑，面板内容、页内导航、返回会话
+全都由官方负责（从插件页点任意会话即可回到对话：`uiWorkspace.openSession()`
+内部会 `selectPanel(null)`）。
+
+图标沿用官方 `sidebar.panellist` 里那一行的同一个图标
+（`IconPluginPinwheelOutlineRegular`，风车），缺失时用内置同路径 SVG 兜底。
+
+**为什么不去占 `sidebar.panellist` 座位**：那个座位的图标是由声明者用
+`renderSlot('sidebar.panellist', …, { only: id })` 交出来的，第三方拿不到；
+而且浮层是自建 DOM，根本不渲染那个座位。去占它只会在官方侧边栏里多出一个
+重复按钮，浮层里仍然画不出来。所以本插件只把那个座位当**能力登记表**读：
+
+```js
+slots.entriesOfSlot('sidebar.panellist').some(e => e.options.id === 'plugins')
+```
+
+有这一行 ⇒ main 里确实注册着这个面板 ⇒ 按钮才渲染。这一步是必须的：
+`layout.selectPanel` 对未注册的 key 会**直接抛错**
+（`main panel "plugins" is not registered`），少了它就是一个点了报错的假按钮。
+`showPluginsPanel: false` 可以关掉这个按钮。
+
+> 收起时会置一个「抑制重开」标记：点完按钮指针通常还停在卡片原来的位置，
+> 而那里可能仍在热区内；不抑制的话鼠标一动浮层就弹回来，看起来像按钮没生效。
+> 指针离开热区一次即恢复正常。
+
 ---
 
 ## 数据来源（官方公开契约）
@@ -212,15 +267,18 @@ staticModules: () => ({
 
 ## 功能清单
 
-**顶栏：个人信息 + 新会话**
-- 顶部一行两枚按钮：**左侧个人信息（头像圆钮）→ 右侧新会话**，同高（38px）居中对齐
+**顶栏：个人信息 + 新会话 + 插件**
+- 顶部一行按钮：**个人信息（头像圆钮）→ 新会话 → 插件（风车方块）**，同高（38px）居中对齐
 - 个人信息按钮：**点一下直接打开官方设置弹窗**，不弹账户菜单，
   所以没有「联系我们 / 退出登录」（详见下方「个人信息按钮」一节）。
   头像与昵称读官方同一份账户数据源，未登录时降级为内置人形图标
 - 新会话按钮：38px 高、`.5px` 描边、`button-elevated-fill` 底、字重 500，
   右侧带快捷键提示（`ShortcutKeys`），`aria-keyshortcuts` 同步暴露
-- 两者互不影响，可分别用 `showProfile` / `showNewSession` 关掉；
-  关掉一个后另一个自动占满整行
+- 插件按钮：**点一下切到官方「插件」面板并收起浮层**，动作走
+  `ctx.layout.selectPanel('plugins')`；图标与官方 `sidebar.panellist` 的
+  plugins 行同源（详见下方「插件按钮」一节）
+- 三者互不影响，可分别用 `showProfile` / `showNewSession` / `showPluginsPanel`
+  关掉；关掉中间那个时其余两个仍成立
 
 **工作区**
 - 分组展示（按工作区 / 按工作区树 / 单列表，三态可切并持久化）
@@ -378,6 +436,7 @@ window.__dshFloatingSidebarOverlay.isOpen()
     archivedFilter: 'default' # 'default' | 'show' | 'only'
     showNewSession: true    # 顶部「新会话」按钮
     showProfile: true       # 顶部「个人信息」（官方账户入口）按钮
+    showPluginsPanel: true  # 顶部「插件」面板按钮（面板未注册时不渲染）
     hotkey: true
     hotkeyBinding: { code: 'KeyL', modifiers: ['primary', 'alt'] }
     debug: false
@@ -568,8 +627,8 @@ max-width: var(--dsh-chat-content-width); width: 100%; margin: 0 auto;
 无需浏览器即可跑的五套（共 433 项），全部通过：
 ```bash
 node test.mjs                 # 纯函数 + CSS 契约 + token 白名单 + 账号/设置绑定（206 项）
-node smoke.mjs                # 组件渲染烟雾（70 项，真实执行组件体）
-node apply-check.mjs          # apply 级集成（115 项，Cordis + DOM 桩）
+node smoke.mjs                # 组件渲染烟雾（84 项，真实执行组件体）
+node apply-check.mjs          # apply 级集成（131 项，Cordis + DOM 桩）
 node layout-check.mjs         # CSS 选择器 × 真实 DOM 的间距契约（28 项）
 node repro-hover-flicker.mjs  # 鼠标触发闪烁的逐帧复现（14 项）
 ```
@@ -675,13 +734,15 @@ node e2e-profile.mjs          # 个人信息按钮端到端（19 项：座位链
    `sidebar.session.row.leading`、`.hover`、`sidebar.panellist`、
    `sidebar.settings`、`sidebar.footer.action`）**不会**出现在本插件的浮层里。
    原因是 slot 的「声明即认领」规则，见上。
-2. **不含全局面板图标**：那是 `sidebar.panellist` 座位，被官方独占，折叠态
-   浮层里因此没有「插件」等面板按钮。
-   两个例外，都是**只借用数据、不占用座位**：
+2. **只搬了一个全局面板**：`sidebar.panellist` 座位仍被官方独占，浮层里没有
+   完整的「全局面板」列表 —— 只有**插件**这一个入口（顶栏右侧风车按钮）。
+   三个例外，都是**只借用数据/能力、不占用座位**：
    - **个人信息按钮**：读 `settings.launcher` 条目的 `account` source 画头像，
      并从 `sidebar.settings` 条目的 store 调 `actions.open()` 打开设置弹窗
      （只保留「设置」这一件事，见上文「个人信息按钮」一节）。
-   - 设置弹窗本体仍由官方 `sidebar.settings` 渲染，本插件只是把它**叫出来**。
+   - **插件按钮**：读 `sidebar.panellist` 的登记表判断面板是否可用，动作走
+     `ctx.layout.selectPanel('plugins')`（见上文「插件按钮」一节）。
+   - 设置弹窗、插件页本体仍由官方渲染，本插件只是把它们**叫出来**。
 3. **依赖官方 hook 名**：`useSessions` / `useSessionStatus` / `useWorkspaces` /
    `usePanelInfo` 来自官方 `provideRoot`，官方改名会失配（此时组件降级为空列表
    并在控制台告警，不会崩）。
@@ -710,8 +771,8 @@ node e2e-profile.mjs          # 个人信息按钮端到端（19 项：座位链
 | `cordis.patch.yml` | bundle patch：`insert` 条目（id `sidebar-overlay`） |
 | `package.json` | `dsh.client` 声明：web 平台、立即加载 |
 | `test.mjs` | 纯函数 + CSS 契约 + token 白名单 + 账号/设置解析（206 项） |
-| `smoke.mjs` | 组件渲染烟雾（70 项，含顶栏排版与点击开设置） |
-| `apply-check.mjs` | apply 级集成测试（115 项） |
+| `smoke.mjs` | 组件渲染烟雾（84 项，含顶栏排版、点击开设置与插件按钮） |
+| `apply-check.mjs` | apply 级集成测试（131 项） |
 | `layout-check.mjs` | CSS 选择器 × 真实 DOM 的间距契约测试（28 项） |
 | `repro-hover-flicker.mjs` | 鼠标触发闪烁的逐帧复现（14 项） |
 | `visual-check.mjs` | headless Chrome 真实渲染几何验证（52 项，含顶栏几何 12 项） |

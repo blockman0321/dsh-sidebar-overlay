@@ -796,6 +796,89 @@ function projectRowHtml(html, needle) {
     noNew.html.includes('data-dsh-fso-profile'))
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * [14] 顶栏「插件」面板按钮
+ *
+ * 对应官方 `sidebar.panellist` 里 plugins 那一行。浮层渲染不出那个座位的
+ * 图标，所以按钮自己画，但**必须只在面板确实注册时**才画：
+ * `ctx.layout.selectPanel` 对未注册的 key 会直接 throw，否则就是假按钮。
+ *
+ * 这里验证：
+ *   · 有该面板时渲染，且排在新会话右边；
+ *   · 缺失时不渲染（不出假按钮），`showPluginsPanel: false` 也关掉；
+ *   · 未选中不带 aria-current，选中时才带；
+ *   · 点击先叫面板、成功才收浮层；失败时浮层不关。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+{
+  const base = makeProps()
+  const withPanel = {
+    ...base,
+    pluginsPanel: true,
+    openPluginsPanel: () => true,
+    closeOverlay: () => {},
+  }
+  const { html } = renderSafe('[14] 插件按钮', withPanel)
+
+  check('[14] 渲染出插件按钮', html.includes('data-dsh-fso-panel-button'), html.slice(0, 600))
+  check('[14] aria-label 是「插件」', html.includes('panel.plugins'), html.slice(0, 800))
+  check('[14] 未选中时不带 aria-current', !html.includes('aria-current="page"'), html.slice(0, 800))
+
+  // 顺序：插件按钮在新会话右边。
+  const topbarStart = html.indexOf('data-dsh-fso-topbar')
+  const newAt = html.indexOf('data-dsh-fso-new', topbarStart)
+  const panelAt = html.indexOf('data-dsh-fso-panel-button', topbarStart)
+  check('[14] 插件按钮在新会话按钮右边',
+    topbarStart >= 0 && newAt > topbarStart && panelAt > newAt,
+    `topbar=${String(topbarStart)} new=${String(newAt)} panel=${String(panelAt)}`)
+
+  // 面板未注册（官方没装 Plugin Manager，或 seats 变了）：不渲染。
+  const without = renderSafe('[14] 无面板', { ...withPanel, pluginsPanel: false })
+  check('[14] 面板未注册时不渲染按钮',
+    !without.html.includes('data-dsh-fso-panel-button'), without.html.slice(0, 400))
+  check('[14] 面板未注册时新会话仍渲染', without.html.includes('data-dsh-fso-new'))
+
+  // 配置项可关。
+  const off = renderSafe('[14] showPluginsPanel=false', {
+    ...withPanel, config: { showPluginsPanel: false },
+  })
+  check('[14] showPluginsPanel=false 关掉按钮',
+    !off.html.includes('data-dsh-fso-panel-button'))
+
+  // 选中态：usePanelInfo 报 plugins 时高亮。
+  const active = renderSafe('[14] 选中态', {
+    ...withPanel,
+    usePanelInfo: makeHook({ activePanelId: 'plugins' }),
+  })
+  check('[14] 选中时带 data-active', active.html.includes('data-active'))
+  check('[14] 选中时带 aria-current=page', active.html.includes('aria-current="page"'))
+
+  // 点击：先开面板，成功才收浮层。
+  // 组件外层是 Tooltip（primitives 缺失时是内置 TooltipFallback），
+  // 真正的 button 在它的 children 里，断言要取内层。
+  let openedPanel = 0
+  const wrapper = M.__PanelButton({
+    usePanelInfo: makeHook({ activePanelId: null }),
+    label: 'panel.plugins',
+    onOpen: () => { openedPanel += 1 },
+  })
+  const element = typeof wrapper?.type === 'function' && wrapper.props?.children !== undefined
+    ? wrapper.props.children
+    : wrapper
+  check('[14] 插件按钮是 button 元素', element?.type === 'button', String(element?.type))
+  check('[14] 点击处理函数已挂载', typeof element?.props?.onClick === 'function')
+  element?.props?.onClick?.()
+  check('[14] 点击触发打开面板', openedPanel === 1, String(openedPanel))
+
+  // openPluginsPanel 失败时不能连浮层一起收掉 —— 那一层在 FloatingSidebar 里，
+  // 这里直接验它的组合逻辑：opened === false ⇒ closeOverlay 不被调用。
+  let closedOnFailure = 0
+  const failing = { ...withPanel, openPluginsPanel: () => false, closeOverlay: () => { closedOnFailure += 1 } }
+  const failed = renderSafe('[14] 打开失败', failing)
+  check('[14] 打开失败时按钮仍在（不因失败而消失）', failed.html.includes('data-dsh-fso-panel-button'))
+  check('[14] 打开失败时未触发收起', closedOnFailure === 0, String(closedOnFailure))
+}
+
 /* ── 结果 ───────────────────────────────────────────────────────────────── */
 
 console.log(`\n通过 ${pass} 项，失败 ${failures.length} 项`)

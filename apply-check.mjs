@@ -179,6 +179,9 @@ const slotInjections = []
 
 const services = new Map()
 
+/** `slots.entriesOfSlot` 的座位内容；用例按需改写以模拟官方登记表。 */
+const slotsEntries = {}
+
 function makeCtx(parentEffects) {
   const base = {
     /** 已注册的 effect 清理函数。 */
@@ -226,6 +229,7 @@ const calls = {
   openSession: [], startSession: [], forkSession: [], pinSession: [], unpinSession: [],
   archiveSession: [], unarchiveSession: [], renameSession: [], renameWorkspace: [],
   deleteWorkspace: [], insertWorkspaceBefore: [], createWorkspace: [], search: [], pickDirectory: [],
+  selectPanel: [],
 }
 
 services.set('slots', {
@@ -238,6 +242,8 @@ services.set('slots', {
     registrations.push({ options, component })
     return () => {}
   },
+  /** 与官方 SlotCore 同名同义：这里默认「空座位」，用例可改写它来模拟登记。 */
+  entriesOfSlot: key => (slotsEntries[key] ?? []),
 })
 
 services.set('uiWorkspace', {
@@ -275,6 +281,18 @@ services.set('locale', {
 
 services.set('shortcuts', {
   register: options => { services.get('shortcuts').registered = options; return () => {} },
+})
+
+/** 官方 layout 服务：插件按钮靠它切面板，所以记录调用并模拟「已注册校验」。 */
+services.set('layout', {
+  /** 已注册的 main 面板 key；selectPanel 对不在表里的会 throw（官方行为）。 */
+  registeredPanels: new Set(['conversation', 'plugins', 'schedules']),
+  selectPanel(id) {
+    calls.selectPanel.push(id)
+    if (id !== null && !this.registeredPanels.has(id)) {
+      throw new Error(`layout.selectPanel: main panel "${id}" is not registered`)
+    }
+  },
 })
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -395,6 +413,62 @@ check('[24b] 注入面带 openSettings 字段（可为 undefined）',
   'openSettings' in (injected ?? {}), `keys=${Object.keys(injected ?? {}).join(',')}`)
 check('[24b] slots 没有 sidebar.settings 时 openSettings 为 undefined',
   injected?.openSettings === undefined, String(injected?.openSettings))
+
+/* ── [24c] 「插件」面板按钮：登记表判据 + selectPanel 路径 ────────────────
+ *
+ * 浮层渲染不出 `sidebar.panellist` 的图标，所以按钮只把那个座位当**能力登记表**
+ * 读：有 plugins 这一行 ⇒ main 里确实注册着 ⇒ `selectPanel` 不会抛错。
+ * 没有 ⇒ 不渲染，绝不出假按钮。 */
+
+check('[24c] 注入面带 pluginsPanel 字段（可为 false）',
+  'pluginsPanel' in (injected ?? {}), `keys=${Object.keys(injected ?? {}).join(',')}`)
+check('[24c] 座位为空时 pluginsPanel 为 false',
+  injected?.pluginsPanel === false, String(injected?.pluginsPanel))
+check('[24c] 注入面带 openPluginsPanel 字段', typeof injected?.openPluginsPanel === 'function')
+check('[24c] 注入面带 closeOverlay 字段', typeof injected?.closeOverlay === 'function')
+
+// 空座位下 openPluginsPanel 仍然要能工作（判据与动作分开：判据决定画不画）。
+injected.openPluginsPanel()
+check('[24c] openPluginsPanel 调 layout.selectPanel("plugins")',
+  calls.selectPanel.includes('plugins'), JSON.stringify(calls.selectPanel))
+
+// 登记了 plugins 之后，重新调用 inject 工厂应得到 true。
+slotsEntries['sidebar.panellist'] = [{ options: { id: 'plugins' }, component: () => null }]
+const injectedWithPanel = registration.options.inject()
+check('[24c] 座位登记了 plugins 时 pluginsPanel 为 true',
+  injectedWithPanel?.pluginsPanel === true, String(injectedWithPanel?.pluginsPanel))
+
+// 只认 id：登记了别的面板不算。
+slotsEntries['sidebar.panellist'] = [{ options: { id: 'schedules' } }]
+check('[24c] 只登记了 schedules 时 pluginsPanel 仍为 false',
+  registration.options.inject()?.pluginsPanel === false)
+
+// selectPanel 抛错时 openPluginsPanel 返回 false（调用处据此不收浮层）。
+const layoutService = services.get('layout')
+layoutService.registeredPanels.delete('plugins')
+let openResult
+let openThrew = false
+try {
+  openResult = registration.options.inject().openPluginsPanel()
+} catch (error) {
+  openThrew = true
+}
+check('[24c] selectPanel 抛错时 openPluginsPanel 不向外抛', openThrew === false)
+check('[24c] selectPanel 抛错时 openPluginsPanel 返回 false', openResult === false, String(openResult))
+layoutService.registeredPanels.add('plugins')
+
+// 没有 layout 服务时也不崩（软依赖）。
+services.delete('layout')
+let noLayoutResult
+let noLayoutThrew = false
+try {
+  noLayoutResult = registration.options.inject().openPluginsPanel()
+} catch (error) {
+  noLayoutThrew = true
+}
+check('[24c] layout 缺失时 openPluginsPanel 不抛错', noLayoutThrew === false)
+check('[24c] layout 缺失时 openPluginsPanel 返回 false', noLayoutResult === false, String(noLayoutResult))
+services.set('layout', layoutService)
 
 /* ── [25] 业务回调真的转发到服务 ────────────────────────────────────────── */
 
@@ -1015,6 +1089,79 @@ check('[30] 写了 --dsh-fso-top 变量',
   if (savedTop === '') html.style.removeProperty('--dsh-fso-top')
   else html.style.setProperty('--dsh-fso-top', savedTop)
 
+  globalThis.getComputedStyle = previousComputed
+  documentStub.querySelector = previousQuery
+  documentStub.querySelectorAll = previousQueryAll
+}
+
+/* ── [36] closeOverlay：收起浮层并抑制「立刻重开」─────────────────────────
+ *
+ * 顶栏「插件」按钮点完会调它。它必须
+ *   · 收起浮层（`isOpen()` 变 false）；
+ *   · 置「抑制重开」：指针原地不动时不再被热区重新打开 —— 否则按钮点完
+ *     浮层立刻弹回来，看起来像没生效；
+ *   · 指针离开热区一次后恢复，热区功能不能被永久关掉。
+ *
+ * 这一节放在最后：`suppressReveal` 是 apply 级状态，跑在指针用例之前会
+ * 把它们全部拦住。
+ * ------------------------------------------------------------------------- */
+
+{
+  const fakeCard = new StubElement('div')
+  fakeCard.setAttribute('data-dsh-fso-card', '')
+  const fakePanel = new StubElement('div')
+  fakePanel.setAttribute('data-dsh-fso-panel', '')
+  fakePanel.getBoundingClientRect = () => ({ left: 0, top: 0, right: 296, bottom: 900, width: 296, height: 900 })
+  const fakeConversation = new StubElement('div')
+  fakeConversation.setAttribute('data-conversation-content', '')
+  fakeConversation.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1020, bottom: 900, width: 1020, height: 900 })
+  const collapsedFrame = new StubElement('div')
+  collapsedFrame.setAttribute('class', 'BynINW_frame')
+  collapsedFrame.setAttribute('data-sidebar-collapsed', 'true')
+
+  const previousQuery = documentStub.querySelector
+  const previousComputed = globalThis.getComputedStyle
+  const previousQueryAll = documentStub.querySelectorAll
+  documentStub.querySelector = selector => {
+    if (selector === '[data-dsh-fso-card]') return fakeCard
+    if (selector === '[data-dsh-fso-panel]') return fakePanel
+    if (selector === '[data-conversation-content]') return fakeConversation
+    if (String(selector).includes('_frame')) return collapsedFrame
+    return previousQuery?.call(documentStub, selector) ?? null
+  }
+  documentStub.querySelectorAll = () => []
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' })
+  html.style.setProperty('--dsh-fso-top', '0px')
+
+  const api = globalThis.window.__dshFloatingSidebarOverlay
+
+  // 先正常打开一次。
+  documentStub.dispatch?.('pointermove', { clientX: 20, clientY: 400 })
+  check('[36] 前置：热区能把浮层打开', api?.isOpen() === true, `isOpen=${String(api?.isOpen())}`)
+
+  // closeOverlay 收起它。
+  let closeThrew = false
+  try {
+    registration.options.inject().closeOverlay()
+  } catch (error) {
+    closeThrew = true
+  }
+  check('[36] closeOverlay 不抛错', closeThrew === false)
+  check('[36] closeOverlay 收起了浮层', api?.isOpen() === false, `isOpen=${String(api?.isOpen())}`)
+
+  // 关键：指针还在热区里轻动，不能弹回来。
+  documentStub.dispatch?.('pointermove', { clientX: 21, clientY: 401 })
+  documentStub.dispatch?.('pointermove', { clientX: 22, clientY: 402 })
+  check('[36] 指针仍在热区内时不会被立刻重开（抑制生效）',
+    api?.isOpen() === false, `isOpen=${String(api?.isOpen())}`)
+
+  // 指针离开热区一次 → 抑制解除。
+  documentStub.dispatch?.('pointermove', { clientX: 900, clientY: 900 })
+  documentStub.dispatch?.('pointermove', { clientX: 20, clientY: 400 })
+  check('[36] 指针离开热区后热区功能恢复（抑制只生效一次）',
+    api?.isOpen() === true, `isOpen=${String(api?.isOpen())}`)
+
+  documentStub.dispatch?.('pointermove', { clientX: 900, clientY: 900 })
   globalThis.getComputedStyle = previousComputed
   documentStub.querySelector = previousQuery
   documentStub.querySelectorAll = previousQueryAll
